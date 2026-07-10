@@ -49,6 +49,8 @@ OpenTelemetry and Langfuse on OpenShift.
 
 Run from the repo root.
 
+Note: The images referenced below are available and public so you can skip this step and use them as is, but if you build+push your own versions you'll need to replace the image references in the various chart parameters and deployment resources.
+
 ### Agent
 
 ```bash
