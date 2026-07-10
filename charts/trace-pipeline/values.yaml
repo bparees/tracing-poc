@@ -1,0 +1,105 @@
+# Default values for trace-pipeline.
+
+# Workload name for the collector+uploader pod and OTLP Service.
+nameOverride: upload-collector
+fullnameOverride: upload-collector
+
+collector:
+  # OpenTelemetryCollector CR name; referenced by sidecar injection annotation.
+  crName: upload-collector
+  rotation:
+    maxMegabytes: 100
+    maxDays: 7
+    maxBackups: 10
+    localtime: true
+
+pusher:
+  image:
+    repository: quay.io/bparees/trace-pusher
+    tag: latest
+    pullPolicy: IfNotPresent
+  intervalSeconds: 60
+  tracesDir: /tmp/traces
+  volume:
+    sizeLimit: 1Gi
+  resources: {}
+  langfuse:
+    # In-cluster default; override for external Langfuse (e.g. https://cloud.langfuse.com).
+    host: ""
+    credentialsSecret: langfuse-push-credentials
+    createCredentialsSecret: true
+    publicKey: ""
+    secretKey: ""
+
+# OpenShift Route for external Langfuse UI access (not passed to langfuse subchart).
+langfuseRoute:
+  enabled: true
+  # Route object name (default: <release>-langfuse, e.g. trace-pipeline-langfuse).
+  name: ""
+  # Leave empty for an OpenShift-generated hostname.
+  host: ""
+  # Canonical public URL for NextAuth. Set to https://<route-host> after install.
+  publicUrl: ""
+  # Override if the langfuse subchart service name differs from <release>-web.
+  webServiceName: ""
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+# MinIO credentials Secret (parent chart). Langfuse web/worker and the MinIO pod
+# must read the same Secret or S3 uploads fail with SignatureDoesNotMatch.
+minio:
+  createCredentialsSecret: true
+  rootUser: minio
+  rootPassword: ""
+  secretName: ""
+
+# Langfuse subchart (https://langfuse.github.io/langfuse-k8s).
+# All keys under this block are passed to the dependency when langfuse.enabled is true.
+langfuse:
+  enabled: true
+  # Must match the Helm release name so Langfuse DB/Redis/ClickHouse DNS names align
+  # with the Bitnami subchart Services (e.g. trace-pipeline-postgresql, not
+  # trace-pipeline-langfuse-postgresql).
+  fullnameOverride: trace-pipeline
+  langfuse:
+    nextauth:
+      # Set to langfuseRoute.publicUrl or https://<route-host> for external UI login.
+      url: ""
+      secret:
+        value: ""
+    salt:
+      value: ""
+    encryptionKey:
+      value: ""
+  clickhouse:
+    replicaCount: 1
+    resourcesPreset: medium
+    auth:
+      password: ""
+    persistence:
+      enabled: false
+    zookeeper:
+      persistence:
+        enabled: false
+  postgresql:
+    auth:
+      password: ""
+    primary:
+      persistence:
+        enabled: false
+  redis:
+    auth:
+      password: ""
+    primary:
+      persistence:
+        enabled: false
+  s3:
+    # MinIO stores trace event blobs (required even with emptyDir persistence).
+    # Credentials come from the parent chart Secret via existingSecret (see minio.*).
+    persistence:
+      enabled: false
+    auth:
+      existingSecret: trace-pipeline-s3
+      rootUserSecretKey: root-user
+      rootPasswordSecretKey: root-password

@@ -1,0 +1,57 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+== Trace collector (OTLP) ==
+
+Emitters in this namespace can send traces to:
+
+  HTTP: http://{{ include "trace-pipeline.fullname" . }}.{{ .Release.Namespace }}.svc:4318
+  gRPC: {{ include "trace-pipeline.fullname" . }}.{{ .Release.Namespace }}.svc:4317
+
+Example LCS config:
+
+  tracing:
+    enabled: true
+    otlp_endpoint: http://{{ include "trace-pipeline.fullname" . }}.{{ .Release.Namespace }}.svc:4318
+
+The trace pusher runs every {{ .Values.pusher.intervalSeconds }}s and sends new spans to:
+
+  {{ include "trace-pipeline.langfusePushHost" . }}
+
+== Langfuse UI ==
+
+{{- if and .Values.langfuse.enabled .Values.langfuseRoute.enabled }}
+
+External Route:
+
+  oc get route {{ include "trace-pipeline.langfuseRouteName" . }} -n {{ .Release.Namespace }} -o jsonpath='https://{.spec.host}{"\n"}'
+
+After the Route hostname is assigned, set Langfuse NextAuth URL if not already configured:
+
+  langfuse.langfuse.nextauth.url: https://<route-host>
+
+Then upgrade the release so Langfuse UI login works from the external URL.
+
+{{- else if .Values.langfuse.enabled }}
+
+Langfuse web Service (cluster-internal):
+
+  http://{{ include "trace-pipeline.langfuseWebServiceName" . }}.{{ .Release.Namespace }}.svc:3000
+
+{{- end }}
+
+== Langfuse project keys ==
+
+Create a project in the Langfuse UI, then set pusher credentials:
+
+  pusher.langfuse.publicKey
+  pusher.langfuse.secretKey
+
+Or update Secret {{ .Values.pusher.langfuse.credentialsSecret }} and restart the upload-collector pod.
+
+== Verify ==
+
+  oc get pods -l app.kubernetes.io/component=upload-collector -n {{ .Release.Namespace }}
+  oc logs deploy/{{ include "trace-pipeline.fullname" . }} -c uploader -n {{ .Release.Namespace }}

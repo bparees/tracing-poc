@@ -1,0 +1,118 @@
+# OpenShift values — substitute from environment variables before install.
+#
+# Helm cannot read env vars from values files directly. Export the variables
+# below, then either:
+#
+#   ./install-openshift.sh install
+#
+# or pipe through envsubst yourself:
+#
+#   envsubst < values-openshift.example.yaml | helm install trace-pipeline . -f -
+#
+# Required env vars:
+#   LANGFUSE_SALT
+#   LANGFUSE_ENCRYPTION_KEY
+#   LANGFUSE_NEXTAUTH_SECRET
+#   LANGFUSE_NEXTAUTH_URL          # https://<route-host> (use placeholder for first install)
+#   POSTGRES_PASSWORD
+#   REDIS_PASSWORD
+#   CLICKHOUSE_PASSWORD
+#   MINIO_PASSWORD
+#   LANGFUSE_PUSH_PUBLIC_KEY
+#   LANGFUSE_PUSH_SECRET_KEY
+#   LANGFUSE_INIT_USER_EMAIL
+#   LANGFUSE_INIT_USER_PASSWORD
+#
+# Optional headless-init identifiers (defaults substituted by install-openshift.sh):
+#   LANGFUSE_INIT_ORG_ID
+#   LANGFUSE_INIT_PROJECT_ID
+#   LANGFUSE_INIT_ORG_NAME
+#   LANGFUSE_INIT_PROJECT_NAME
+#   LANGFUSE_INIT_USER_NAME
+#
+# Optional env vars (default to empty — OpenShift assigns Route host):
+#   LANGFUSE_ROUTE_HOST
+#   LANGFUSE_ROUTE_PUBLIC_URL
+#
+# RELEASE_NAME is substituted into langfuse.fullnameOverride (default: trace-pipeline).
+#
+# Quick start:
+#   export LANGFUSE_SALT=$(openssl rand -base64 32)
+#   export LANGFUSE_ENCRYPTION_KEY=$(openssl rand -hex 32)
+#   export LANGFUSE_NEXTAUTH_SECRET=$(openssl rand -base64 32)
+#   export POSTGRES_PASSWORD=$(openssl rand -hex 24)
+#   export REDIS_PASSWORD=$(openssl rand -hex 24)
+#   export CLICKHOUSE_PASSWORD=$(openssl rand -hex 24)
+#   export MINIO_PASSWORD=$(openssl rand -hex 24)
+#   export LANGFUSE_NEXTAUTH_URL=http://localhost:3000
+#   export LANGFUSE_PUSH_PUBLIC_KEY="pk-lf-$(openssl rand -hex 24)"
+#   export LANGFUSE_PUSH_SECRET_KEY="sk-lf-$(openssl rand -hex 24)"
+#   export LANGFUSE_INIT_USER_EMAIL=admin@example.com
+#   export LANGFUSE_INIT_USER_PASSWORD=$(openssl rand -base64 16)
+#   ./install-openshift.sh install
+
+langfuseRoute:
+  enabled: true
+  host: "${LANGFUSE_ROUTE_HOST}"
+  publicUrl: "${LANGFUSE_ROUTE_PUBLIC_URL}"
+
+pusher:
+  langfuse:
+    publicKey: "${LANGFUSE_PUSH_PUBLIC_KEY}"
+    secretKey: "${LANGFUSE_PUSH_SECRET_KEY}"
+
+minio:
+  rootPassword: "${MINIO_PASSWORD}"
+
+langfuse:
+  enabled: true
+  fullnameOverride: "${RELEASE_NAME}"
+  langfuse:
+    nextauth:
+      url: "${LANGFUSE_NEXTAUTH_URL}"
+      secret:
+        value: "${LANGFUSE_NEXTAUTH_SECRET}"
+    salt:
+      value: "${LANGFUSE_SALT}"
+    encryptionKey:
+      value: "${LANGFUSE_ENCRYPTION_KEY}"
+    # Headless init: creates admin user, org, project, and API keys on startup.
+    # https://langfuse.com/self-hosting/headless-initialization
+    additionalEnv:
+      - name: LANGFUSE_INIT_ORG_ID
+        value: "${LANGFUSE_INIT_ORG_ID}"
+      - name: LANGFUSE_INIT_ORG_NAME
+        value: "${LANGFUSE_INIT_ORG_NAME}"
+      - name: LANGFUSE_INIT_PROJECT_ID
+        value: "${LANGFUSE_INIT_PROJECT_ID}"
+      - name: LANGFUSE_INIT_PROJECT_NAME
+        value: "${LANGFUSE_INIT_PROJECT_NAME}"
+      - name: LANGFUSE_INIT_PROJECT_PUBLIC_KEY
+        value: "${LANGFUSE_PUSH_PUBLIC_KEY}"
+      - name: LANGFUSE_INIT_PROJECT_SECRET_KEY
+        value: "${LANGFUSE_PUSH_SECRET_KEY}"
+      - name: LANGFUSE_INIT_USER_EMAIL
+        value: "${LANGFUSE_INIT_USER_EMAIL}"
+      - name: LANGFUSE_INIT_USER_NAME
+        value: "${LANGFUSE_INIT_USER_NAME}"
+      - name: LANGFUSE_INIT_USER_PASSWORD
+        value: "${LANGFUSE_INIT_USER_PASSWORD}"
+  clickhouse:
+    replicaCount: 1
+    resourcesPreset: medium
+    auth:
+      password: "${CLICKHOUSE_PASSWORD}"
+  postgresql:
+    auth:
+      password: "${POSTGRES_PASSWORD}"
+  redis:
+    auth:
+      password: "${REDIS_PASSWORD}"
+  s3:
+    auth:
+      # Parent chart creates this Secret; MinIO and Langfuse web both read it.
+      existingSecret: "${RELEASE_NAME}-s3"
+      rootUserSecretKey: root-user
+      rootPasswordSecretKey: root-password
+    persistence:
+      enabled: false

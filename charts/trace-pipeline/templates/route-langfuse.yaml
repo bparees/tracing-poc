@@ -1,0 +1,21 @@
+{{- if and .Values.langfuse.enabled .Values.langfuseRoute.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "trace-pipeline.langfuseRouteName" . }}
+  labels:
+    {{- include "trace-pipeline.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.langfuseRoute.host }}
+  host: {{ .Values.langfuseRoute.host }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "trace-pipeline.langfuseWebServiceName" . }}
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: {{ .Values.langfuseRoute.tls.termination }}
+    insecureEdgeTerminationPolicy: {{ .Values.langfuseRoute.tls.insecureEdgeTerminationPolicy }}
+{{- end }}

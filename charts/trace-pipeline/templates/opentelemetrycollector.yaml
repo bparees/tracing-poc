@@ -1,0 +1,33 @@
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: {{ .Values.collector.crName }}
+  labels:
+    {{- include "trace-pipeline.labels" . | nindent 4 }}
+spec:
+  mode: sidecar
+  volumeMounts:
+    - name: trace-files
+      mountPath: {{ .Values.pusher.tracesDir }}
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    exporters:
+      file:
+        path: {{ .Values.pusher.tracesDir }}/spans.json
+        format: json
+        rotation:
+          max_megabytes: {{ .Values.collector.rotation.maxMegabytes }}
+          max_days: {{ .Values.collector.rotation.maxDays }}
+          max_backups: {{ .Values.collector.rotation.maxBackups }}
+          localtime: {{ .Values.collector.rotation.localtime }}
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          exporters: [file]

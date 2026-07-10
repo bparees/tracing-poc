@@ -1,0 +1,31 @@
+# vim: set filetype=dockerfile
+# Minimal image that incrementally pushes OTEL span files to Langfuse.
+ARG RUNTIME_BASE_IMAGE=registry.access.redhat.com/ubi9/python-312-minimal
+
+FROM ${RUNTIME_BASE_IMAGE}
+
+ARG APP_ROOT=/app
+WORKDIR ${APP_ROOT}
+
+USER root
+
+RUN pip3.12 install --no-cache-dir "requests>=2.32.0"
+
+COPY push_to_langfuse.py otlp_utils.py ./
+COPY run_push_loop.sh ./
+
+RUN chmod +x run_push_loop.sh && chown -R 1001:1001 "${APP_ROOT}"
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TRACES_DIR=/tmp/traces \
+    PUSH_INTERVAL_SECONDS=60
+
+USER 1001
+
+ENTRYPOINT ["./run_push_loop.sh"]
+
+LABEL vendor="Red Hat, Inc." \
+    name="trace-pusher" \
+    summary="Incrementally pushes OTEL span files from disk to Langfuse." \
+    description="Long-running loop that reads collector file-exporter output and POSTs new spans to Langfuse OTLP ingest."

@@ -1,0 +1,52 @@
+{{/*
+RBAC for the post-install/upgrade rollout-restart hook Job.
+Created before the hook Job runs (pre-install weight -5) and kept across
+upgrades so the Job always has permissions.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "trace-pipeline.fullname" . }}-restarter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "trace-pipeline.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "trace-pipeline.fullname" . }}-restarter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "trace-pipeline.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "trace-pipeline.fullname" . }}-restarter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "trace-pipeline.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "trace-pipeline.fullname" . }}-restarter
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "trace-pipeline.fullname" . }}-restarter
+    namespace: {{ .Release.Namespace }}

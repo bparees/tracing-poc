@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "trace-pipeline.fullname" . }}
+  labels:
+    {{- include "trace-pipeline.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "trace-pipeline.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "trace-pipeline.selectorLabels" . | nindent 8 }}
+      annotations:
+        sidecar.opentelemetry.io/inject: {{ .Values.collector.crName | quote }}
+    spec:
+      containers:
+        - name: uploader
+          image: "{{ .Values.pusher.image.repository }}:{{ .Values.pusher.image.tag }}"
+          imagePullPolicy: {{ .Values.pusher.image.pullPolicy }}
+          env:
+            - name: PUSH_INTERVAL_SECONDS
+              value: {{ .Values.pusher.intervalSeconds | quote }}
+            - name: TRACES_DIR
+              value: {{ .Values.pusher.tracesDir | quote }}
+            - name: LANGFUSE_HOST
+              value: {{ include "trace-pipeline.langfusePushHost" . | quote }}
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pusher.langfuse.credentialsSecret }}
+                  key: public-key
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pusher.langfuse.credentialsSecret }}
+                  key: secret-key
+          volumeMounts:
+            - name: trace-files
+              mountPath: {{ .Values.pusher.tracesDir }}
+          livenessProbe:
+            exec:
+              command:
+                - test
+                - -f
+                - /tmp/healthy
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          readinessProbe:
+            exec:
+              command:
+                - test
+                - -f
+                - /tmp/healthy
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          {{- with .Values.pusher.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: trace-files
+          emptyDir:
+            sizeLimit: {{ .Values.pusher.volume.sizeLimit }}

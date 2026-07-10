@@ -1,0 +1,84 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # generateName causes the API server to append a random suffix on every
+  # `oc create`, so each run gets a unique name (e.g. telemetry-poc-agent-run-x4k2j)
+  # without having to delete the previous Job first.
+  # Use `oc create -f deploy/job.yaml` (not `oc apply`) to trigger this.
+  generateName: telemetry-poc-agent-run-
+  namespace: telemetry-poc
+  labels:
+    app: telemetry-poc
+spec:
+  # Run exactly once; do not retry on failure (treat each Job as one prompt).
+  completions: 1
+  parallelism: 1
+  backoffLimit: 0
+
+  # Keep finished pod logs available for 1 hour before the Job is garbage-collected.
+  ttlSecondsAfterFinished: 3600
+
+  template:
+    metadata:
+      labels:
+        app: telemetry-poc
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: agent
+          image: quay.io/bparees/sample-agent:latest
+          imagePullPolicy: Always
+
+          env:
+            # ------------------------------------------------------------------
+            # Sensitive config — injected from a Secret (see secret.yaml.template)
+            # ------------------------------------------------------------------
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: telemetry-poc-secrets
+                  key: OPENAI_API_KEY
+
+            # ------------------------------------------------------------------
+            # OTEL Collector — point at your in-cluster receiver
+            # ------------------------------------------------------------------
+            - name: OTEL_COLLECTOR_ENDPOINT
+              value: "http://upload-collector.telemetry-poc.svc.cluster.local:4318"
+            - name: OTEL_SERVICE_NAME
+              value: "telemetry-poc"
+
+            # ------------------------------------------------------------------
+            # Agent behaviour
+            # ------------------------------------------------------------------
+
+            # The prompt to run. If omitted the agent runs the built-in canned
+            # batch of 5 prompts; if set it runs exactly this one prompt.
+            - name: TELEMETRY_PROMPT
+              value: "What's the weather in Paris and how does it compare to London?"
+
+            # Identity attached to every trace span.
+            - name: TELEMETRY_USER_ID
+              value: "anonymous"
+
+            # Uncomment and set to group this run into an existing conversation.
+            # - name: TELEMETRY_CONVERSATION_ID
+            #   value: "replace-with-32-char-hex-id"
+
+            # Uncomment to attach feedback to this run (single-prompt mode only).
+            # - name: TELEMETRY_FEEDBACK_SCORE
+            #   value: "1"       # 1 = positive, -1 = negative
+            # - name: TELEMETRY_FEEDBACK_COMMENT
+            #   value: ""
+
+            # Uncomment to link feedback to a specific prior turn (feedback-only runs).
+            # - name: TELEMETRY_TURN_TRACE_ID
+            #   value: "replace-with-32-char-hex-trace-id"
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"

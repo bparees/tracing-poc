@@ -1,0 +1,47 @@
+{{/*
+Post-install/upgrade Job that restarts the upload-collector Deployment after
+the OpenTelemetry Operator has had time to reconcile the OpenTelemetryCollector
+CR and arm its sidecar-injection webhook.
+
+Without this, Helm creates the CR and the Deployment simultaneously. The operator
+needs a moment to process the CR, so the first pod starts before sidecar injection
+is active. This Job waits 30s then triggers a rollout restart so the replacement
+pod is created after the webhook is ready.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "trace-pipeline.fullname" . }}-sidecar-restart
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "trace-pipeline.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "trace-pipeline.fullname" . }}-restarter
+      containers:
+        - name: restarter
+          image: bitnami/kubectl:latest
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting 30s for OTel operator to reconcile the collector CR..."
+              sleep 30
+              echo "Triggering rollout restart for {{ include "trace-pipeline.fullname" . }}..."
+              kubectl rollout restart deployment/{{ include "trace-pipeline.fullname" . }} \
+                -n {{ .Release.Namespace }}
+              echo "Restart triggered — sidecar injection will take effect on the new pod."

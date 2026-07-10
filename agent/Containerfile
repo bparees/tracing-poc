@@ -1,0 +1,37 @@
+FROM registry.access.redhat.com/ubi9/python-311:latest
+
+WORKDIR /app
+
+# Install Python dependencies as root so pip can write to the system site-packages.
+USER root
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application source.
+COPY run_agent.py agent.py prompts.py ./
+
+# ---------------------------------------------------------------------------
+# Runtime configuration — all values below are overridable at pod/container
+# start time via environment variables (OpenShift Job env, Secret, ConfigMap).
+# ---------------------------------------------------------------------------
+
+# --- Required ---
+# OPENAI_API_KEY   — your OpenAI API key (inject via Secret)
+
+# --- Agent behaviour ---
+ENV TELEMETRY_BACKEND=otel-collector
+# TELEMETRY_PROMPT          — single custom prompt (omit for canned batch)
+# TELEMETRY_CONVERSATION_ID — 32-char hex; omit to start a new conversation
+# TELEMETRY_DEMO_CONVERSATION=true  — run the 3-turn demo instead of batch
+ENV TELEMETRY_USER_ID=anonymous
+
+# --- OTEL Collector ---
+# Point this at the OTLP HTTP receiver of your in-cluster OTEL Collector.
+# Example: http://otel-collector.observability.svc.cluster.local:4318
+ENV OTEL_COLLECTOR_ENDPOINT=http://localhost:4318
+ENV OTEL_SERVICE_NAME=telemetry-poc
+
+# Drop back to non-root for runtime (UID 1001 is the default non-root user in UBI).
+USER 1001
+
+ENTRYPOINT ["python", "run_agent.py"]

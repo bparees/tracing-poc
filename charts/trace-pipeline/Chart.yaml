@@ -1,0 +1,13 @@
+apiVersion: v2
+name: trace-pipeline
+description: OpenTelemetry trace collector, Langfuse pusher, and in-cluster Langfuse for Lightspeed Stack tracing.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.25.0-0"
+
+dependencies:
+  - name: langfuse
+    version: "1.5.38"
+    repository: https://langfuse.github.io/langfuse-k8s
+    condition: langfuse.enabled
